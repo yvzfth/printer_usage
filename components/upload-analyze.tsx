@@ -19,6 +19,8 @@ import {
   Loader2,
   Settings,
   UploadCloud,
+  PencilLine,
+  Pencil,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
@@ -70,6 +72,22 @@ type Totals = {
   print: number;
 };
 
+const TOTAL_KEYS: (keyof Totals)[] = [
+  'mono',
+  'color',
+  'blank',
+  'total',
+  'adobePdf',
+  'copy',
+  'msExcel',
+  'msPowerPoint',
+  'msWord',
+  'simplex',
+  'duplex',
+  'otherApplication',
+  'print',
+];
+
 type PrinterInfo = {
   deviceModel: string;
   ipHostname: string;
@@ -87,6 +105,17 @@ type UserData = {
   totals: Totals; // Overall totals across all printers
   printerUsage: PrinterUsage[]; // Per-printer usage breakdown
 };
+
+function mergeUserData(target: UserData, source: UserData): UserData {
+  const mergedTotals = { ...target.totals };
+  for (const key of TOTAL_KEYS) {
+    mergedTotals[key] += source.totals[key];
+  }
+  return {
+    totals: mergedTotals,
+    printerUsage: [...target.printerUsage, ...source.printerUsage],
+  };
+}
 
 type ColumnKey = keyof Omit<Totals, 'blank' | 'print'>; // Remove blank and print
 
@@ -147,6 +176,22 @@ function parseIntSafe(v: string): number {
   const n = Number.parseInt(v.replace(/[^\d-]/g, ''), 10);
   return Number.isFinite(n) ? n : 0;
 }
+
+const COLUMN_INDEXES = {
+  MONO: 7,
+  COLOR: 8,
+  BLANK: 9,
+  TOTAL: 10,
+  ADOBE_PDF: 13,
+  COPY: 14,
+  MS_EXCEL: 19,
+  MS_POWERPOINT: 20,
+  MS_WORD: 21,
+  OTHER_APPLICATION: 22,
+  PRINT: 24,
+  SIMPLEX: 27,
+  DUPLEX: 28,
+} as const;
 
 function parseDateStrict(value: string | undefined): Date | undefined {
   if (!value) return undefined;
@@ -342,19 +387,45 @@ async function parseReportHtml(
         const ipAddress = cells[2] ?? 'Unknown IP';
 
         // Updated column mapping
-        const mono = parseIntSafe(cells[7] ?? '0');
-        const color = parseIntSafe(cells[8] ?? '0');
-        const blank = parseIntSafe(cells[9] ?? '0');
-        const total = parseIntSafe(cells[10] ?? String(mono + color + blank));
-        const adobePdf = parseIntSafe(cells[11] ?? '0');
-        const msExcel = parseIntSafe(cells[12] ?? '0');
-        const msPowerPoint = parseIntSafe(cells[13] ?? '0');
-        const msWord = parseIntSafe(cells[14] ?? '0');
-        const otherApplication = parseIntSafe(cells[15] ?? '0');
-        const copy = 0; // Not in this data format
-        const simplex = 0; // Not in this data format
-        const duplex = 0; // Not in this data format
-        const print = 0; // Not in this data format
+        const mono = parseIntSafe(
+          cells[COLUMN_INDEXES.MONO] ?? '0'
+        );
+        const color = parseIntSafe(
+          cells[COLUMN_INDEXES.COLOR] ?? '0'
+        );
+        const blank = parseIntSafe(
+          cells[COLUMN_INDEXES.BLANK] ?? '0'
+        );
+        const total = parseIntSafe(
+          cells[COLUMN_INDEXES.TOTAL] ?? String(mono + color + blank)
+        );
+        const adobePdf = parseIntSafe(
+          cells[COLUMN_INDEXES.ADOBE_PDF] ?? '0'
+        );
+        const copy = parseIntSafe(
+          cells[COLUMN_INDEXES.COPY] ?? '0'
+        );
+        const msExcel = parseIntSafe(
+          cells[COLUMN_INDEXES.MS_EXCEL] ?? '0'
+        );
+        const msPowerPoint = parseIntSafe(
+          cells[COLUMN_INDEXES.MS_POWERPOINT] ?? '0'
+        );
+        const msWord = parseIntSafe(
+          cells[COLUMN_INDEXES.MS_WORD] ?? '0'
+        );
+        const otherApplication = parseIntSafe(
+          cells[COLUMN_INDEXES.OTHER_APPLICATION] ?? '0'
+        );
+        const print = parseIntSafe(
+          cells[COLUMN_INDEXES.PRINT] ?? '0'
+        );
+        const simplex = parseIntSafe(
+          cells[COLUMN_INDEXES.SIMPLEX] ?? '0'
+        );
+        const duplex = parseIntSafe(
+          cells[COLUMN_INDEXES.DUPLEX] ?? '0'
+        );
 
         const parsed = totalsSchema.safeParse({
           mono,
@@ -458,19 +529,21 @@ async function parseReportHtml(
     const cells = Array.from(grandRow.querySelectorAll('td')).map(
       (td) => td.textContent?.trim() ?? ''
     );
-    grand.mono = parseIntSafe(cells[7] ?? '0');
-    grand.color = parseIntSafe(cells[8] ?? '0');
-    grand.blank = parseIntSafe(cells[9] ?? '0');
-    grand.total = parseIntSafe(cells[10] ?? '0');
-    grand.adobePdf = parseIntSafe(cells[11] ?? '0');
-    grand.copy = parseIntSafe(cells[14] ?? '0'); // Corrected from cells[14]
-    grand.msExcel = parseIntSafe(cells[12] ?? '0');
-    grand.msPowerPoint = parseIntSafe(cells[13] ?? '0');
-    grand.msWord = parseIntSafe(cells[14] ?? '0');
-    grand.otherApplication = parseIntSafe(cells[15] ?? '0');
-    grand.print = parseIntSafe(cells[24] ?? '0'); // Assuming this remains correct
-    grand.simplex = parseIntSafe(cells[27] ?? '0'); // Assuming this remains correct
-    grand.duplex = parseIntSafe(cells[28] ?? '0'); // Assuming this remains correct
+    grand.mono = parseIntSafe(cells[COLUMN_INDEXES.MONO] ?? '0');
+    grand.color = parseIntSafe(cells[COLUMN_INDEXES.COLOR] ?? '0');
+    grand.blank = parseIntSafe(cells[COLUMN_INDEXES.BLANK] ?? '0');
+    grand.total = parseIntSafe(cells[COLUMN_INDEXES.TOTAL] ?? '0');
+    grand.adobePdf = parseIntSafe(cells[COLUMN_INDEXES.ADOBE_PDF] ?? '0');
+    grand.copy = parseIntSafe(cells[COLUMN_INDEXES.COPY] ?? '0');
+    grand.msExcel = parseIntSafe(cells[COLUMN_INDEXES.MS_EXCEL] ?? '0');
+    grand.msPowerPoint = parseIntSafe(cells[COLUMN_INDEXES.MS_POWERPOINT] ?? '0');
+    grand.msWord = parseIntSafe(cells[COLUMN_INDEXES.MS_WORD] ?? '0');
+    grand.otherApplication = parseIntSafe(
+      cells[COLUMN_INDEXES.OTHER_APPLICATION] ?? '0'
+    );
+    grand.print = parseIntSafe(cells[COLUMN_INDEXES.PRINT] ?? '0');
+    grand.simplex = parseIntSafe(cells[COLUMN_INDEXES.SIMPLEX] ?? '0');
+    grand.duplex = parseIntSafe(cells[COLUMN_INDEXES.DUPLEX] ?? '0');
   } else {
     for (const userData of Object.values(usersData)) {
       const u = userData.totals;
@@ -1180,12 +1253,51 @@ export default function UploadAnalyze({
   );
 
   const updateUserName = useCallback(() => {
-    if (editingUser && tempUserName.trim()) {
-      setUserNameMappings((prev) => ({
-        ...prev,
-        [editingUser]: tempUserName.trim(),
-      }));
+    if (!editingUser) return;
+    const trimmed = tempUserName.trim();
+    if (!trimmed) {
+      setEditingUser(null);
+      setTempUserName('');
+      return;
     }
+
+    if (trimmed !== editingUser) {
+      setPeriods((prevPeriods) =>
+        prevPeriods.map((period) => {
+          if (!period.users[editingUser]) return period;
+          const existingData = period.users[editingUser];
+          const updatedUsers = { ...period.users };
+          delete updatedUsers[editingUser];
+
+          if (updatedUsers[trimmed]) {
+            updatedUsers[trimmed] = mergeUserData(
+              updatedUsers[trimmed],
+              existingData
+            );
+          } else {
+            updatedUsers[trimmed] = existingData;
+          }
+
+          return { ...period, users: updatedUsers };
+        })
+      );
+
+      setSelectedRows((prev) => {
+        if (!prev.has(editingUser)) return prev;
+        const next = new Set(prev);
+        next.delete(editingUser);
+        next.add(trimmed);
+        return next;
+      });
+    }
+
+    setUserNameMappings((prev) => {
+      const next = { ...prev };
+      delete next[editingUser];
+      next[trimmed] = trimmed;
+      return next;
+    });
+
     setEditingUser(null);
     setTempUserName('');
   }, [editingUser, tempUserName]);
@@ -1850,7 +1962,7 @@ export default function UploadAnalyze({
                                       className='opacity-0 group-hover:opacity-100 h-6 w-6 p-0'
                                       onClick={() => startEditingUser(user)}
                                     >
-                                      ✏️
+                                      <Pencil className='h-4 w-4' />
                                     </Button>
                                   </div>
                                 )}

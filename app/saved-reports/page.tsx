@@ -176,17 +176,17 @@ export default function SavedReportsPage() {
               <ArrowLeft className='mr-2 h-4 w-4' /> Back to Reports
             </Button>
           </div>
-          <div className='flex flex-wrap items-center gap-3'>
+          <div className='flex  items-center gap-3'>
             {isRenaming ? (
               <form
-                className='flex flex-wrap items-center gap-2'
+                className='flex items-center gap-2'
                 onSubmit={handleRenameSubmit}
               >
                 <Input
                   autoFocus
                   value={pendingReportName}
                   onChange={(event) => setPendingReportName(event.target.value)}
-                  className='w-64'
+                  className='w-96 text-black'
                 />
                 <Button
                   size='sm'
