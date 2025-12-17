@@ -1,0 +1,53 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Next.js / build output
+.next/
+out/
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# macOS
+.DS_Store
+
+# Editor directories and files
+.vscode/
+.idea/
+*.sublime-workspace
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+lcov-report/
+
+# Tooling caches
+.cache/
+.eslintcache
+
+# Lockfiles for package managers should be committed (do NOT ignore package-lock.json/yarn.lock/pnpm-lock.yaml)
+
+# Temporary files
+*.tmp
+*.temp
+
+# Archives / packages
+*.tgz
+
+# OS swap files
+.*.swp
