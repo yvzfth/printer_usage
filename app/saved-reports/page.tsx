@@ -307,16 +307,13 @@ export default function SavedReportsPage() {
                           <h3 className='font-medium'>{report.reportName}</h3>
                         </div>
                         <p className='text-sm text-muted-foreground'>
-                          {new Date(report.createdAt).toLocaleDateString(
-                            undefined,
-                            {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            }
-                          )}
+                          {new Intl.DateTimeFormat('en-UK', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }).format(new Date(report.createdAt))}
                         </p>
                       </div>
                       <div className='flex gap-2'>

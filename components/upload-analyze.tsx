@@ -159,13 +159,15 @@ function parseDateStrict(value: string | undefined): Date | undefined {
   return isNaN(d.getTime()) ? undefined : d;
 }
 
-function toPrettyDate(d?: Date): string {
+function toPrettyDate(d?: Date | string): string {
   if (!d) return 'Unknown';
-  return d.toLocaleDateString(undefined, {
+  const date = typeof d === 'string' ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return new Intl.DateTimeFormat('en-UK', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  });
+  }).format(date);
 }
 
 function derivePeriodLabel(
@@ -175,16 +177,16 @@ function derivePeriodLabel(
 ): string {
   if (rangeStart && rangeEnd) {
     const sameYear = rangeStart.getFullYear() === rangeEnd.getFullYear();
-    const startFmt = rangeStart.toLocaleDateString(undefined, {
+    const startFmt = new Intl.DateTimeFormat('en-UK', {
       month: 'short',
       day: 'numeric',
       year: sameYear ? undefined : 'numeric',
-    });
-    const endFmt = rangeEnd.toLocaleDateString(undefined, {
+    }).format(rangeStart);
+    const endFmt = new Intl.DateTimeFormat('en-UK', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-    });
+    }).format(rangeEnd);
     return `${startFmt} \u2192 ${endFmt}`;
   }
   return fallback ?? 'Unknown Period';
@@ -967,28 +969,27 @@ export default function UploadAnalyze({
     const doc = new jsPDF();
 
     doc.setFontSize(20);
-    doc.text('HP Web Jetadmin Report Analysis', 20, 20);
-
-    doc.setFontSize(12);
-    let yPos = 40;
-    doc.text(`Files Analyzed: ${aggregated.periods.length}`, 20, yPos);
-    yPos += 10;
-    doc.text(`Users Detected: ${aggregated.allUsers.length}`, 20, yPos);
-    yPos += 10;
+    doc.text('IRH Paper Consumption Report', 14, 20);
+    doc.setFontSize(10);
     if (aggregated.overallRange) {
       doc.text(
-        `Date Range: ${toPrettyDate(
-          aggregated.overallRange.start
-        )} - ${toPrettyDate(aggregated.overallRange.end)}`,
-        20,
-        yPos
+        `[${toPrettyDate(aggregated.overallRange.start)} - ${toPrettyDate(
+          aggregated.overallRange.end
+        )}]`,
+        120,
+        19
       );
-      yPos += 10;
     }
 
-    yPos += 10;
+    // Add UNDP logo
+    const logoImg = '/UNDP_logo.svg-1.png';
+    doc.addImage(logoImg, 'PNG', 185, 10, 15, 30); // x, y, width, height
+
+    doc.setFontSize(12);
+    let yPos = 30;
+
     doc.setFontSize(14);
-    doc.text('Print Totals Summary', 20, yPos);
+    doc.text('Print Totals Summary', 14, yPos);
     yPos += 10;
     doc.setFontSize(10);
 
@@ -1002,48 +1003,25 @@ export default function UploadAnalyze({
         const t = userData.totals;
         acc.mono += t.mono;
         acc.color += t.color;
-        acc.blank += t.blank;
         acc.total += t.total;
-        acc.adobePdf += t.adobePdf;
-        acc.copy += t.copy;
-        acc.msExcel += t.msExcel;
-        acc.msPowerPoint += t.msPowerPoint;
-        acc.msWord += t.msWord;
-        acc.simplex += t.simplex;
-        acc.duplex += t.duplex;
-        acc.otherApplication += t.otherApplication;
         acc.print += t.print;
         return acc;
       },
       {
         mono: 0,
         color: 0,
-        blank: 0,
         total: 0,
-        adobePdf: 0,
-        copy: 0,
-        msExcel: 0,
-        msPowerPoint: 0,
-        msWord: 0,
-        simplex: 0,
-        duplex: 0,
-        otherApplication: 0,
         print: 0,
-      } as Totals
+      } as Pick<Totals, 'mono' | 'color' | 'total' | 'print'>
     );
 
-    doc.text(`Total Pages: ${grandSelectedTotals.total}`, 20, yPos);
-    doc.text(`Mono: ${grandSelectedTotals.mono}`, 80, yPos);
-    doc.text(`Color: ${grandSelectedTotals.color}`, 120, yPos);
-    yPos += 10;
-    doc.text(`Adobe PDF: ${grandSelectedTotals.adobePdf}`, 20, yPos);
-    doc.text(`MS Excel: ${grandSelectedTotals.msExcel}`, 80, yPos);
-    doc.text(`MS Word: ${grandSelectedTotals.msWord}`, 120, yPos);
-    yPos += 10;
-    doc.text(`Copy: ${grandSelectedTotals.copy}`, 20, yPos);
-    doc.text(`Other Apps: ${grandSelectedTotals.otherApplication}`, 80, yPos);
+    doc.text(`Users: ${rowsToExport.length}`, 14, yPos);
+    doc.text(`Mono: ${grandSelectedTotals.mono}`, 44, yPos);
+    doc.text(`Color: ${grandSelectedTotals.color}`, 74, yPos);
 
-    yPos += 20;
+    doc.text(`Total Pages: ${grandSelectedTotals.total}`, 104, yPos);
+
+    yPos += 10;
     const tableHeaders = [
       'User',
       'Printers',
@@ -1063,21 +1041,33 @@ export default function UploadAnalyze({
       head: [tableHeaders],
       body: tableData,
       startY: yPos,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [66, 139, 202] },
+      styles: {
+        fontSize: 9,
+        cellPadding: 1,
+        lineColor: [210, 210, 210],
+        lineWidth: 0.1,
+      },
+      headStyles: {
+        fillColor: [66, 139, 202],
+        textColor: 255,
+        fontSize: 10,
+        halign: 'center',
+      },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
       columnStyles: {
-        0: { cellWidth: 30 },
-        1: { cellWidth: 40 },
+        0: { cellWidth: 54, fontStyle: 'bold' },
+        1: { cellWidth: 28 },
         ...Object.fromEntries(
           visibleColumns.map((_, index) => [
             index + 2,
-            { cellWidth: 12, halign: 'right' },
+            { cellWidth: 13, halign: 'right' },
           ])
         ),
       },
+      theme: 'grid',
     });
 
-    const fileName = `jetadmin-report-${
+    const fileName = `IRH_Paper_Consumption_Report_${
       new Date().toISOString().split('T')[0]
     }.pdf`;
     doc.save(fileName);
@@ -1436,7 +1426,9 @@ export default function UploadAnalyze({
                 variant='outline'
                 className={cn(
                   'flex min-w-64 items-center gap-2 text-sm',
-                  originalFileName ? 'justify-start text-left' : 'justify-center'
+                  originalFileName
+                    ? 'justify-start text-left'
+                    : 'justify-center'
                 )}
                 onClick={() => inputRef.current?.click()}
               >
