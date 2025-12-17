@@ -141,6 +141,8 @@ const AVAILABLE_COLUMNS: ColumnConfig[] = [
   { key: 'total', label: 'Total', shortLabel: 'Total' },
 ];
 
+const DEFAULT_REPORT_OWNER = 'General';
+
 function parseIntSafe(v: string): number {
   const n = Number.parseInt(v.replace(/[^\d-]/g, ''), 10);
   return Number.isFinite(n) ? n : 0;
@@ -660,6 +662,7 @@ type UploadAnalyzeProps = {
   initialPeriods?: ReportPeriod[];
   initialReportName?: string;
   initialUserName?: string;
+  initialReportId?: string;
 };
 
 function toDate(value?: Date | string) {
@@ -695,6 +698,7 @@ export default function UploadAnalyze({
   initialPeriods,
   initialReportName,
   initialUserName,
+  initialReportId,
 }: UploadAnalyzeProps = {}) {
   const [periods, setPeriods] = useState<ReportPeriod[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
@@ -715,10 +719,14 @@ export default function UploadAnalyze({
   const [originalFileName, setOriginalFileName] = useState<string>('');
   const hydratedFromProps = useRef(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
-  const [saveReportName, setSaveReportName] = useState(
-    initialReportName ?? ''
+  const [saveReportName, setSaveReportName] = useState(initialReportName ?? '');
+  const [saveUserName, setSaveUserName] = useState(
+    initialUserName?.trim() || DEFAULT_REPORT_OWNER
   );
-  const [saveUserName, setSaveUserName] = useState(initialUserName ?? '');
+  const [existingReportId, setExistingReportId] = useState<string | undefined>(
+    initialReportId
+  );
+  const isViewingSavedReport = Boolean(existingReportId);
   const [isSavingReport, setIsSavingReport] = useState(false);
   // Add row selection state
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
@@ -789,17 +797,26 @@ export default function UploadAnalyze({
       if (!saveReportName) {
         setSaveReportName(derivedName);
       }
-      if (initialUserName) {
-        setSaveUserName(initialUserName);
-      }
+      setSaveUserName(initialUserName?.trim() || DEFAULT_REPORT_OWNER);
+      setExistingReportId(initialReportId);
       hydratedFromProps.current = true;
     }
   }, [
     initialPeriods,
     initialReportName,
     initialUserName,
+    initialReportId,
     saveReportName,
   ]);
+  useEffect(() => {
+    if (
+      existingReportId &&
+      initialReportName &&
+      initialReportName !== saveReportName
+    ) {
+      setSaveReportName(initialReportName);
+    }
+  }, [existingReportId, initialReportName, saveReportName]);
   const [dragOver, setDragOver] = useState(false);
 
   const onFiles = useCallback(async (files: FileList | null) => {
@@ -815,6 +832,7 @@ export default function UploadAnalyze({
     const trimmedFileName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
     setOriginalFileName(file.name);
     setSaveReportName(trimmedFileName);
+    setExistingReportId(undefined);
 
     try {
       const text = await file.text();
@@ -1088,6 +1106,7 @@ export default function UploadAnalyze({
     setOriginalFileName(''); // Also clear the original file name
     setSaveReportName('');
     setIsSaveDialogOpen(false);
+    setExistingReportId(undefined);
   }, [clearRowSelection]);
 
   const onTogglePeriod = useCallback((id: PeriodKey) => {
@@ -1219,7 +1238,6 @@ export default function UploadAnalyze({
     setShowDeleteConfirm(false);
   }, [selectedRows]);
 
-
   // Removed saveReport function
 
   // Column visibility handlers
@@ -1303,125 +1321,151 @@ export default function UploadAnalyze({
     setIsSaveDialogOpen(true);
   }, [initialReportName, originalFileName, saveReportName]);
 
-  const canSaveReport =
-    saveReportName.trim().length > 0 &&
-    saveUserName.trim().length > 0 &&
-    periods.length > 0;
+  const canSaveReport = saveReportName.trim().length > 0 && periods.length > 0;
 
-  const onSaveReport = useCallback(async () => {
-    if (!canSaveReport) return;
-    const payload = {
-      reportName: saveReportName.trim(),
-      userName: saveUserName.trim(),
-      periods,
-    };
-    setIsSavingReport(true);
-    try {
-      const response = await fetch('/api/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data?.error || 'Failed to save report');
+  const saveReport = useCallback(
+    async (targetReportId?: string) => {
+      if (!canSaveReport) return;
+      const payload = {
+        reportName: saveReportName.trim(),
+        userName: saveUserName.trim(),
+        periods,
+      };
+      setIsSavingReport(true);
+      const isUpdate = Boolean(targetReportId);
+      try {
+        const response = await fetch(
+          isUpdate ? `/api/reports/${targetReportId}` : '/api/reports',
+          {
+            method: isUpdate ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }
+        );
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data?.error ||
+              (isUpdate ? 'Failed to update report' : 'Failed to save report')
+          );
+        }
+        setIsSaveDialogOpen(false);
+        if (typeof window !== 'undefined') {
+          window.alert(
+            isUpdate
+              ? 'Report updated successfully.'
+              : 'Report saved successfully.'
+          );
+        }
+      } catch (error) {
+        console.error('Failed to save report', error);
+        if (typeof window !== 'undefined') {
+          const message =
+            error instanceof Error && error.message
+              ? error.message
+              : 'Failed to save report. Please try again.';
+          window.alert(message);
+        }
+      } finally {
+        setIsSavingReport(false);
       }
-      setIsSaveDialogOpen(false);
-      if (typeof window !== 'undefined') {
-        window.alert('Report saved successfully.');
-      }
-    } catch (error) {
-      console.error('Failed to save report', error);
-      if (typeof window !== 'undefined') {
-        window.alert('Failed to save report. Please try again.');
-      }
-    } finally {
-      setIsSavingReport(false);
+    },
+    [canSaveReport, periods, saveReportName, saveUserName]
+  );
+
+  const handleSaveButtonClick = useCallback(() => {
+    if (existingReportId) {
+      saveReport(existingReportId);
+    } else {
+      handleOpenSaveDialog();
     }
-  }, [canSaveReport, periods, saveReportName, saveUserName]);
+  }, [existingReportId, handleOpenSaveDialog, saveReport]);
 
   return (
     <div>
-      <div
-        onDrop={onDrop}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        className={cn(
-          'flex flex-col items-center justify-center rounded-lg border border-dashed p-8 transition-colors',
-          dragOver
-            ? 'border-emerald-500 bg-emerald-50/50'
-            : 'border-muted-foreground/20'
-        )}
-        role='region'
-        aria-label='Upload zone'
-      >
-        <UploadCloud
+      {!isViewingSavedReport && (
+        <div
+          onDrop={onDrop}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
           className={cn(
-            'mb-3 h-8 w-8',
-            dragOver ? 'text-emerald-600' : 'text-muted-foreground'
+            'flex flex-col items-center justify-center rounded-lg border border-dashed p-8 transition-colors',
+            dragOver
+              ? 'border-emerald-500 bg-emerald-50/50'
+              : 'border-muted-foreground/20'
           )}
-          aria-hidden
-        />
-        {!originalFileName && (
-          <>
-            <p className='mb-2 text-sm'>
-              Drag & drop your HP Web Jetadmin HTML report here
-            </p>
-            <p className='mb-4 text-xs text-muted-foreground'>
-              We process files in-browser. No data leaves your device.
-            </p>
-          </>
-        )}
-        <div className='flex items-center gap-3'>
-          <div className='space-y-2'>
-            <Label htmlFor='file-input' className='sr-only'>
-              Select HTML file
-            </Label>
-            <input
-              ref={inputRef}
-              id='file-input'
-              type='file'
-              accept='.html,.htm,text/html'
-              onChange={(e) => onFiles(e.currentTarget.files)}
-              className='sr-only'
-            />
-            <Button
-              type='button'
-              variant='outline'
-              className={cn(
-                'flex w-[260px] items-center gap-2 text-sm',
-                originalFileName ? 'justify-start text-left' : 'justify-center'
-              )}
-              onClick={() => inputRef.current?.click()}
-            >
-              {originalFileName ? (
-                <>
-                  <FileText className='h-4 w-4 flex-shrink-0' aria-hidden />
-                  <span className='flex-1 truncate'>{originalFileName}</span>
-                </>
-              ) : (
-                <>
-                  <FileUp className='h-4 w-4 flex-shrink-0' aria-hidden />
-                  Browse
-                </>
-              )}
-            </Button>
+          role='region'
+          aria-label='Upload zone'
+        >
+          {!originalFileName && (
+            <>
+              <UploadCloud
+                className={cn(
+                  'mb-3 h-8 w-8',
+                  dragOver ? 'text-emerald-600' : 'text-muted-foreground'
+                )}
+                aria-hidden
+              />
+
+              <p className='mb-2 text-sm'>
+                Drag & drop your HP Web Jetadmin HTML report here
+              </p>
+              <p className='mb-4 text-xs text-muted-foreground'>
+                We process files in-browser. No data leaves your device.
+              </p>
+            </>
+          )}
+          <div className='flex items-center gap-3'>
+            <div className='space-y-2'>
+              <Label htmlFor='file-input' className='sr-only'>
+                Select HTML file
+              </Label>
+              <input
+                ref={inputRef}
+                id='file-input'
+                type='file'
+                accept='.html,.htm,text/html'
+                onChange={(e) => onFiles(e.currentTarget.files)}
+                className='sr-only'
+              />
+              <Button
+                type='button'
+                variant='outline'
+                className={cn(
+                  'flex min-w-64 items-center gap-2 text-sm',
+                  originalFileName ? 'justify-start text-left' : 'justify-center'
+                )}
+                onClick={() => inputRef.current?.click()}
+              >
+                {originalFileName ? (
+                  <>
+                    <FileText className='h-4 w-4 shrink-0' aria-hidden />
+                    <span className='flex-1'>{originalFileName}</span>
+                  </>
+                ) : (
+                  <>
+                    <FileUp className='h-4 w-4 shrink-0' aria-hidden />
+                    Browse
+                  </>
+                )}
+              </Button>
+            </div>
+            {periods.length > 0 && (
+              <Button variant='ghost' onClick={clearAll}>
+                <Trash2 className='mr-2 h-4 w-4' /> Clear
+              </Button>
+            )}
           </div>
-          {periods.length > 0 && (
-            <Button variant='ghost' onClick={clearAll}>
-              <Trash2 className='mr-2 h-4 w-4' /> Clear
-            </Button>
+          {isParsing && (
+            <div className='mt-3 inline-flex items-center text-sm text-muted-foreground'>
+              <Loader2 className='mr-2 h-4 w-4 animate-spin' /> Parsing...
+            </div>
           )}
         </div>
-        {isParsing && (
-          <div className='mt-3 inline-flex items-center text-sm text-muted-foreground'>
-            <Loader2 className='mr-2 h-4 w-4 animate-spin' /> Parsing...
-          </div>
-        )}
-      </div>
+      )}
 
       {errors.length > 0 && (
         <Alert variant='destructive' className='mt-4'>
@@ -1514,11 +1558,7 @@ export default function UploadAnalyze({
                       </Button>
                     </>
                   )}
-                  {selectedRows.size === 0 && (
-                    <Button size='sm' variant='outline' onClick={selectAllRows}>
-                      Select All
-                    </Button>
-                  )}
+
                   <div className='relative' ref={columnMenuRef}>
                     <Button
                       size='sm'
@@ -1601,14 +1641,7 @@ export default function UploadAnalyze({
                       </div>
                     )}
                   </div>
-                  <Button
-                    size='sm'
-                    variant='outline'
-                    onClick={handleOpenSaveDialog}
-                    disabled={periods.length === 0}
-                  >
-                    Save
-                  </Button>
+
                   <Button size='sm' variant='outline' onClick={onExportCsv}>
                     <Download className='mr-2 h-3.5 w-3.5' /> Export CSV
                     {selectedRows.size > 0 && ` (${selectedRows.size})`}
@@ -1616,6 +1649,18 @@ export default function UploadAnalyze({
                   <Button size='sm' variant='outline' onClick={onExportPdf}>
                     <Download className='mr-2 h-3.5 w-3.5' /> Export PDF
                     {selectedRows.size > 0 && ` (${selectedRows.size})`}
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    onClick={handleSaveButtonClick}
+                    disabled={periods.length === 0 || isSavingReport}
+                    className='bg-green-700  text-white border-emerald-600'
+                  >
+                    {isSavingReport && (
+                      <Loader2 className='mr-2 h-3.5 w-3.5 animate-spin' />
+                    )}
+                    {existingReportId ? 'Save Changes' : 'Save'}
                   </Button>
                 </div>
               </div>
@@ -1648,8 +1693,7 @@ export default function UploadAnalyze({
                   >
                     <Filter className='mr-2 h-4 w-4' />
                     Printers{' '}
-                    {selectedPrinters.size > 0 &&
-                      `(${selectedPrinters.size})`}
+                    {selectedPrinters.size > 0 && `(${selectedPrinters.size})`}
                   </Button>
                   {isPrinterMenuOpen && (
                     <div
@@ -1705,7 +1749,10 @@ export default function UploadAnalyze({
                                 htmlFor={`printer-${printer}`}
                                 className='text-sm font-medium leading-none'
                               >
-                                <span className='block truncate' title={printer}>
+                                <span
+                                  className='block truncate'
+                                  title={printer}
+                                >
                                   {formatPrinterName(printer)} ({printer})
                                 </span>
                               </label>
@@ -1871,7 +1918,7 @@ export default function UploadAnalyze({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={deleteSelectedRows}
-              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+              className='bg-destructive text-white hover:bg-destructive/90'
             >
               Delete
             </AlertDialogAction>
@@ -1896,15 +1943,6 @@ export default function UploadAnalyze({
                 placeholder='Quarterly usage report'
               />
             </div>
-            <div className='space-y-1'>
-              <Label htmlFor='save-user-name'>User name</Label>
-              <Input
-                id='save-user-name'
-                value={saveUserName}
-                onChange={(e) => setSaveUserName(e.target.value)}
-                placeholder='Jane Doe'
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button
@@ -1917,7 +1955,7 @@ export default function UploadAnalyze({
             </Button>
             <Button
               type='button'
-              onClick={onSaveReport}
+              onClick={() => saveReport()}
               disabled={!canSaveReport || isSavingReport}
             >
               {isSavingReport && (

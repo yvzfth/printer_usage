@@ -51,3 +51,5 @@ lcov-report/
 
 # OS swap files
 .*.swp
+
+/storage

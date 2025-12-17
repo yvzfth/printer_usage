@@ -37,6 +37,46 @@ async function ensureUserDir(userName: string) {
   return { dir, slug }
 }
 
+async function reportNameExists(userName: string, reportName: string) {
+  await ensureStorageDir()
+  const normalizedUser = userName.trim().toLowerCase()
+  const normalizedName = reportName.trim().toLowerCase()
+  const entries = await readdir(STORAGE_PATH, { withFileTypes: true })
+
+  const checkFile = async (filePath: string) => {
+    const content = await readFile(filePath, "utf-8")
+    const data = JSON.parse(content)
+    return (
+      typeof data?.userName === "string" &&
+      typeof data?.reportName === "string" &&
+      data.userName.trim().toLowerCase() === normalizedUser &&
+      data.reportName.trim().toLowerCase() === normalizedName
+    )
+  }
+
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.endsWith(".json")) {
+      if (await checkFile(join(STORAGE_PATH, entry.name))) {
+        return true
+      }
+    }
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const dirPath = join(STORAGE_PATH, entry.name)
+    const files = await readdir(dirPath)
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue
+      if (await checkFile(join(dirPath, file))) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
 async function readReportSummaries(): Promise<Record<string, ReportSummary[]>> {
   await ensureStorageDir()
   const entries = await readdir(STORAGE_PATH, { withFileTypes: true })
@@ -123,6 +163,13 @@ export async function POST(request: Request) {
 
     if (!reportName || !userName || !periods) {
       return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 })
+    }
+
+    if (await reportNameExists(userName, reportName)) {
+      return NextResponse.json(
+        { success: false, error: "A report with this name already exists. Please choose another name." },
+        { status: 409 },
+      )
     }
 
     const { dir, slug } = await ensureUserDir(userName)

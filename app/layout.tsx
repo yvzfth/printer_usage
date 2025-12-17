@@ -6,19 +6,17 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'IRH Paper Consumption Dashboard',
   description: 'A dashboard to monitor and analyze paper consumption at IRH',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
-        url: '/favicon-32x32.png',
+        url: '/UNDP_white.jpg',
         media: '(prefers-color-scheme: light)',
       },
       {
-        url: '/favicon-32x32.png',
+        url: '/UNDP_black.jpg',
         media: '(prefers-color-scheme: dark)',
       },
     ],
-    apple: '/apple-touch-icon.png',
   },
 };
 

@@ -41,9 +41,6 @@ export default function Page() {
       <Card>
         <CardHeader>
           <CardTitle>Upload report</CardTitle>
-          <CardDescription>
-            Upload exported HTML report to see the per-user print statistics.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <UploadAnalyze />
