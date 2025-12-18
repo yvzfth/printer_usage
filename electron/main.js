@@ -14,6 +14,25 @@ process.env.NEXT_TELEMETRY_DISABLED = '1';
 const resolveAppDirectory = () =>
   app.isPackaged ? app.getAppPath() : path.join(__dirname, '..');
 
+const getAppIconPath = () => path.join(resolveAppDirectory(), 'public', 'app-icon.png');
+
+const ensureReportsDirectory = () => {
+  if (process.env.REPORTS_DIRECTORY && process.env.REPORTS_DIRECTORY.trim()) {
+    return process.env.REPORTS_DIRECTORY;
+  }
+
+  const basePath = app.isPackaged
+    ? app.getPath('userData')
+    : path.join(process.cwd(), 'storage');
+
+  const targetPath = app.isPackaged
+    ? path.join(basePath, 'reports')
+    : path.join(basePath, 'reports');
+
+  process.env.REPORTS_DIRECTORY = targetPath;
+  return targetPath;
+};
+
 const prepareNextServer = () => {
   if (isDev) {
     return Promise.resolve();
@@ -48,6 +67,7 @@ const prepareNextServer = () => {
 
 const createMainWindow = async () => {
   try {
+    ensureReportsDirectory();
     await prepareNextServer();
 
     const window = new BrowserWindow({
@@ -55,6 +75,7 @@ const createMainWindow = async () => {
       height: 900,
       backgroundColor: '#0b0b0b',
       show: false,
+      icon: getAppIconPath(),
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server"
 import { readFile, readdir, unlink, writeFile } from "fs/promises"
-import { join } from "path"
+import { join, resolve } from "path"
 import { existsSync } from "fs"
 
-const STORAGE_PATH = join(process.cwd(), "storage", "reports")
+const STORAGE_PATH = process.env.REPORTS_DIRECTORY
+  ? resolve(process.env.REPORTS_DIRECTORY)
+  : join(process.cwd(), "storage", "reports")
 
 function getSlugFromId(id: string) {
   return id.includes("__") ? id.split("__")[0] : null

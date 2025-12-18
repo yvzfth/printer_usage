@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server"
 import { readdir, readFile, writeFile, mkdir } from "fs/promises"
-import { join } from "path"
+import { join, resolve } from "path"
 import { existsSync } from "fs"
 
-const STORAGE_PATH = join(process.cwd(), "storage", "reports")
+const STORAGE_PATH = process.env.REPORTS_DIRECTORY
+  ? resolve(process.env.REPORTS_DIRECTORY)
+  : join(process.cwd(), "storage", "reports")
 
 type ReportSummary = {
   id: string

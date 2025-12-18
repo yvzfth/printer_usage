@@ -3,7 +3,7 @@
   "author": {
     "name": "Faith Yavuz"
   },
-  "version": "1.0.0",
+  "version": "1.0.3",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -34,11 +34,13 @@
       "category": "public.app-category.productivity",
       "identity": null,
       "hardenedRuntime": false,
+      "icon": "public/app-icon.ico",
       "target": [
         "dmg"
       ]
     },
     "win": {
+      "icon": "public/app-icon.ico",
       "target": [
         "nsis"
       ]

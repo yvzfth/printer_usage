@@ -19,7 +19,6 @@ import {
   Loader2,
   Settings,
   UploadCloud,
-  PencilLine,
   Pencil,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -87,12 +86,6 @@ const TOTAL_KEYS: (keyof Totals)[] = [
   'otherApplication',
   'print',
 ];
-
-type PrinterInfo = {
-  deviceModel: string;
-  ipHostname: string;
-  ipAddress: string;
-};
 
 type PrinterUsage = {
   deviceModel: string;
@@ -387,45 +380,25 @@ async function parseReportHtml(
         const ipAddress = cells[2] ?? 'Unknown IP';
 
         // Updated column mapping
-        const mono = parseIntSafe(
-          cells[COLUMN_INDEXES.MONO] ?? '0'
-        );
-        const color = parseIntSafe(
-          cells[COLUMN_INDEXES.COLOR] ?? '0'
-        );
-        const blank = parseIntSafe(
-          cells[COLUMN_INDEXES.BLANK] ?? '0'
-        );
+        const mono = parseIntSafe(cells[COLUMN_INDEXES.MONO] ?? '0');
+        const color = parseIntSafe(cells[COLUMN_INDEXES.COLOR] ?? '0');
+        const blank = parseIntSafe(cells[COLUMN_INDEXES.BLANK] ?? '0');
         const total = parseIntSafe(
           cells[COLUMN_INDEXES.TOTAL] ?? String(mono + color + blank)
         );
-        const adobePdf = parseIntSafe(
-          cells[COLUMN_INDEXES.ADOBE_PDF] ?? '0'
-        );
-        const copy = parseIntSafe(
-          cells[COLUMN_INDEXES.COPY] ?? '0'
-        );
-        const msExcel = parseIntSafe(
-          cells[COLUMN_INDEXES.MS_EXCEL] ?? '0'
-        );
+        const adobePdf = parseIntSafe(cells[COLUMN_INDEXES.ADOBE_PDF] ?? '0');
+        const copy = parseIntSafe(cells[COLUMN_INDEXES.COPY] ?? '0');
+        const msExcel = parseIntSafe(cells[COLUMN_INDEXES.MS_EXCEL] ?? '0');
         const msPowerPoint = parseIntSafe(
           cells[COLUMN_INDEXES.MS_POWERPOINT] ?? '0'
         );
-        const msWord = parseIntSafe(
-          cells[COLUMN_INDEXES.MS_WORD] ?? '0'
-        );
+        const msWord = parseIntSafe(cells[COLUMN_INDEXES.MS_WORD] ?? '0');
         const otherApplication = parseIntSafe(
           cells[COLUMN_INDEXES.OTHER_APPLICATION] ?? '0'
         );
-        const print = parseIntSafe(
-          cells[COLUMN_INDEXES.PRINT] ?? '0'
-        );
-        const simplex = parseIntSafe(
-          cells[COLUMN_INDEXES.SIMPLEX] ?? '0'
-        );
-        const duplex = parseIntSafe(
-          cells[COLUMN_INDEXES.DUPLEX] ?? '0'
-        );
+        const print = parseIntSafe(cells[COLUMN_INDEXES.PRINT] ?? '0');
+        const simplex = parseIntSafe(cells[COLUMN_INDEXES.SIMPLEX] ?? '0');
+        const duplex = parseIntSafe(cells[COLUMN_INDEXES.DUPLEX] ?? '0');
 
         const parsed = totalsSchema.safeParse({
           mono,
@@ -536,7 +509,9 @@ async function parseReportHtml(
     grand.adobePdf = parseIntSafe(cells[COLUMN_INDEXES.ADOBE_PDF] ?? '0');
     grand.copy = parseIntSafe(cells[COLUMN_INDEXES.COPY] ?? '0');
     grand.msExcel = parseIntSafe(cells[COLUMN_INDEXES.MS_EXCEL] ?? '0');
-    grand.msPowerPoint = parseIntSafe(cells[COLUMN_INDEXES.MS_POWERPOINT] ?? '0');
+    grand.msPowerPoint = parseIntSafe(
+      cells[COLUMN_INDEXES.MS_POWERPOINT] ?? '0'
+    );
     grand.msWord = parseIntSafe(cells[COLUMN_INDEXES.MS_WORD] ?? '0');
     grand.otherApplication = parseIntSafe(
       cells[COLUMN_INDEXES.OTHER_APPLICATION] ?? '0'
@@ -936,32 +911,23 @@ export default function UploadAnalyze({
 
   const aggregated = useMemo(() => computeAggregated(periods), [periods]);
 
+  const filteredPeriods = useMemo(() => {
+    if (selectedPeriodIds.size === 0) {
+      return periods;
+    }
+    return periods.filter((p) => selectedPeriodIds.has(p.id));
+  }, [periods, selectedPeriodIds]);
+
+  const selectedUsersAgg = useMemo(
+    () => aggregateUsersForSelected(filteredPeriods, selectedPrinters),
+    [filteredPeriods, selectedPrinters]
+  );
+
   const visibleColumns = useMemo(() => {
     return AVAILABLE_COLUMNS.filter(
       (col) => columnVisibility[col.key] && !zeroColumns.has(col.key)
     );
   }, [columnVisibility, zeroColumns]);
-
-  const onExportJson = useCallback(() => {
-    const payload = {
-      periods: aggregated.periods.map((p) => ({
-        fileName: p.fileName,
-        periodLabel: p.periodLabel,
-        dateCreated: p.dateCreated?.toISOString(),
-        rangeStart: p.rangeStart?.toISOString(),
-        rangeEnd: p.rangeEnd?.toISOString(),
-        users: p.users,
-        grandTotals: p.grandTotals,
-      })),
-      overallRange: aggregated.overallRange
-        ? {
-            start: aggregated.overallRange.start.toISOString(),
-            end: aggregated.overallRange.end.toISOString(),
-          }
-        : undefined,
-    };
-    downloadBlob('jetadmin-analysis.json', JSON.stringify(payload, null, 2));
-  }, [aggregated]);
 
   const filteredUsers = useMemo(() => {
     const lowerCaseQuery = userSearchQuery.toLowerCase();
@@ -970,41 +936,18 @@ export default function UploadAnalyze({
         const displayName = userNameMappings[user] || user;
         return displayName.toLowerCase().includes(lowerCaseQuery);
       })
-      .filter((user) => {
-        if (selectedPrinters.size === 0) return true;
-        // Find the user's data across all periods
-        let userHasSelectedPrinter = false;
-        for (const period of aggregated.periods) {
-          if (period.users[user]) {
-            for (const printerUsage of period.users[user].printerUsage) {
-              if (selectedPrinters.has(printerUsage.ipHostname)) {
-                userHasSelectedPrinter = true;
-                break;
-              }
-            }
-          }
-          if (userHasSelectedPrinter) break;
-        }
-        return userHasSelectedPrinter;
-      })
-      .map((user) => [
-        user,
-        aggregateUsersForSelected(
-          periods.filter(
-            (p) => selectedPeriodIds.size === 0 || selectedPeriodIds.has(p.id)
-          ),
-          selectedPrinters
-        )[user],
-      ])
-      .filter(([, userData]) => userData !== undefined); // Filter out users with no data after aggregation
+      .filter(
+        (user) =>
+          selectedPrinters.size === 0 || selectedUsersAgg[user] !== undefined
+      )
+      .map((user) => [user, selectedUsersAgg[user]])
+      .filter(([, userData]) => userData !== undefined);
   }, [
     aggregated.allUsers,
-    userSearchQuery,
     selectedPrinters,
-    periods,
-    aggregateUsersForSelected,
-    selectedPeriodIds,
+    selectedUsersAgg,
     userNameMappings,
+    userSearchQuery,
   ]);
 
   const onExportCsv = useCallback(() => {
@@ -1035,7 +978,9 @@ export default function UploadAnalyze({
       );
     }
     const csv = rows.join('\n');
-    downloadBlob('jetadmin-users.csv', csv, 'text/csv');
+    const today = new Date().toISOString().split('T')[0];
+    const fileName = `IRH Paper Consumption Report - ${today}.csv`;
+    downloadBlob(fileName, csv, 'text/csv');
   }, [filteredUsers, userNameMappings, visibleColumns, selectedRows]);
 
   const onExportPdf = useCallback(() => {
@@ -1140,7 +1085,7 @@ export default function UploadAnalyze({
       theme: 'grid',
     });
 
-    const fileName = `IRH_Paper_Consumption_Report_${
+    const fileName = `IRH Paper Consumption Report - ${
       new Date().toISOString().split('T')[0]
     }.pdf`;
     doc.save(fileName);
@@ -1192,13 +1137,6 @@ export default function UploadAnalyze({
   const onClearSelection = useCallback(() => {
     setSelectedPeriodIds(new Set());
   }, []);
-
-  const selectedUsersAgg = useMemo(() => {
-    const filteredPeriods = periods.filter(
-      (p) => selectedPeriodIds.size === 0 || selectedPeriodIds.has(p.id)
-    );
-    return aggregateUsersForSelected(filteredPeriods, selectedPrinters);
-  }, [periods, selectedPeriodIds, aggregateUsersForSelected, selectedPrinters]);
 
   const grandSelectedTotals = useMemo(() => {
     return Object.values(selectedUsersAgg).reduce(
@@ -1355,17 +1293,10 @@ export default function UploadAnalyze({
     const newColumnVisibility = { ...columnVisibility };
 
     for (const col of AVAILABLE_COLUMNS) {
-      let allZeros = true;
-      // Check selected periods only if any are selected
-      const relevantPeriods = periods.filter(
-        (p) => selectedPeriodIds.size === 0 || selectedPeriodIds.has(p.id)
-      );
-      if (relevantPeriods.length === 0) {
-        // If no periods selected, consider all columns visible
-        allZeros = false;
-      } else {
-        for (const period of relevantPeriods) {
-          // Check user totals for the current period
+      let allZeros = filteredPeriods.length > 0;
+
+      if (allZeros) {
+        for (const period of filteredPeriods) {
           for (const userKey in period.users) {
             if (period.users[userKey].totals[col.key] > 0) {
               allZeros = false;
@@ -1378,12 +1309,12 @@ export default function UploadAnalyze({
 
       if (allZeros) {
         currentZeroColumns.add(col.key);
-        newColumnVisibility[col.key] = false; // Hide the column if all are zeros
+        newColumnVisibility[col.key] = false;
       }
     }
     setZeroColumns(currentZeroColumns);
     setColumnVisibility(newColumnVisibility);
-  }, [columnVisibility, periods, selectedPeriodIds]);
+  }, [columnVisibility, filteredPeriods]);
 
   const toggleColumnVisibility = useCallback((key: ColumnKey) => {
     setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -1402,10 +1333,6 @@ export default function UploadAnalyze({
     });
   }, []);
 
-  const clearPrinterFilters = useCallback(() => {
-    setSelectedPrinters(new Set());
-  }, []);
-
   const allPrinters = aggregated.allPrinters; // Renamed from allPrinters to allPrinters for clarity
   const selectAllPrinters = useCallback(() => {
     setSelectedPrinters(new Set(allPrinters));
@@ -1413,7 +1340,6 @@ export default function UploadAnalyze({
   const clearPrinterSelection = useCallback(() => {
     setSelectedPrinters(new Set());
   }, []);
-  const togglePrinterSelection = togglePrinterFilter; // Alias for clarity
   const handleOpenSaveDialog = useCallback(() => {
     if (!saveReportName) {
       setSaveReportName(
@@ -1846,7 +1772,7 @@ export default function UploadAnalyze({
                                 id={`printer-${printer}`}
                                 checked={selectedPrinters.has(printer)}
                                 onCheckedChange={() =>
-                                  togglePrinterSelection(printer)
+                                  togglePrinterFilter(printer)
                                 }
                               />
                               <label
