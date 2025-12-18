@@ -3,7 +3,7 @@
   "author": {
     "name": "Faith Yavuz"
   },
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
