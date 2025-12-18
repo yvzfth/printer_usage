@@ -40,7 +40,7 @@ Each desktop build runs the bundled Next server and stores reports under the use
 
 ## Custom Icons & Branding
 
-- Place your app icon at `public/app-icon.png`; Electron windows and installers use this asset automatically.
+- Place your app icon at `public/app-icon.ico`; Electron windows and installers use this asset automatically.
 - Update metadata in `package.json` (`name`, `author`, `build.appId`, etc.) to match your organization.
 
 ## Troubleshooting
