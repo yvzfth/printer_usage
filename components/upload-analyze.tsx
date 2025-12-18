@@ -292,7 +292,9 @@ async function parseReportHtml(
   const headerTable =
     doc.querySelector('table#header') ?? doc.querySelector('table');
   if (headerTable) {
-    const rows = Array.from(headerTable.querySelectorAll('tr'));
+    const rows = Array.from(
+      headerTable.querySelectorAll<HTMLTableRowElement>('tr')
+    );
     for (const tr of rows) {
       const th = tr.querySelector('th')?.textContent?.trim();
       const td = tr.querySelector('td')?.textContent?.trim();
@@ -312,10 +314,15 @@ async function parseReportHtml(
 
   const usersData: Record<UserKey, UserData> = {};
 
-  const groupHeaders = Array.from(doc.querySelectorAll('tr.group_hdr'));
+  const groupHeaders = Array.from(
+    doc.querySelectorAll<HTMLTableRowElement>('tr.group_hdr')
+  );
   for (const gh of groupHeaders) {
     if (!/user/i.test(gh.textContent ?? '')) continue;
-    const usernameRow = gh.parentElement?.querySelector('tr:nth-of-type(2)');
+    const usernameRow =
+      gh.parentElement?.querySelector<HTMLTableRowElement>(
+        'tr:nth-of-type(2)'
+      );
     const username =
       usernameRow?.querySelector('td')?.textContent?.trim() ?? 'Unknown User';
 
@@ -342,7 +349,9 @@ async function parseReportHtml(
     }
 
     // Find all data rows for this user (not just the first one)
-    const allRows = Array.from(doc.querySelectorAll('tr'));
+    const allRows = Array.from(
+      doc.querySelectorAll<HTMLTableRowElement>('tr')
+    );
     const idx = allRows.indexOf(gh);
 
     let foundColumnHeader = false;
@@ -929,22 +938,25 @@ export default function UploadAnalyze({
     );
   }, [columnVisibility, zeroColumns]);
 
-  const filteredUsers = useMemo(() => {
+  const filteredUsers = useMemo<Array<[string, UserData]>>(() => {
     const lowerCaseQuery = userSearchQuery.toLowerCase();
-    return aggregated.allUsers
-      .filter((user) => {
-        const displayName = userNameMappings[user] || user;
-        return displayName.toLowerCase().includes(lowerCaseQuery);
-      })
-      .filter(
-        (user) =>
-          selectedPrinters.size === 0 || selectedUsersAgg[user] !== undefined
-      )
-      .map((user) => [user, selectedUsersAgg[user]])
-      .filter(([, userData]) => userData !== undefined);
+    const result: Array<[string, UserData]> = [];
+
+    aggregated.allUsers.forEach((user) => {
+      const displayName = userNameMappings[user] || user;
+      if (!displayName.toLowerCase().includes(lowerCaseQuery)) {
+        return;
+      }
+
+      const userData = selectedUsersAgg[user];
+      if (!userData) return;
+
+      result.push([user, userData]);
+    });
+
+    return result;
   }, [
     aggregated.allUsers,
-    selectedPrinters,
     selectedUsersAgg,
     userNameMappings,
     userSearchQuery,
@@ -1283,7 +1295,10 @@ export default function UploadAnalyze({
   // Column visibility handlers
   const showAllColumns = useCallback(() => {
     setColumnVisibility(
-      Object.fromEntries(AVAILABLE_COLUMNS.map((col) => [col.key, true]))
+      Object.fromEntries(AVAILABLE_COLUMNS.map((col) => [col.key, true])) as Record<
+        ColumnKey,
+        boolean
+      >
     );
     setZeroColumns(new Set());
   }, []);
@@ -1697,7 +1712,7 @@ export default function UploadAnalyze({
             </CardHeader>
             <CardContent>
               <div className='mb-4 flex flex-wrap items-center gap-3'>
-                <div className='flex-1 min-w-[200px]'>
+                <div className='flex-1 min-w-50'>
                   <Label htmlFor='user-search' className='sr-only'>
                     Search users
                   </Label>
@@ -1896,7 +1911,7 @@ export default function UploadAnalyze({
                               <TableCell className='text-sm'>
                                 <div className='flex flex-wrap gap-1'>
                                   {userData.printerUsage.map(
-                                    (printerUsage, idx) => (
+                                    (printerUsage: PrinterUsage, idx: number) => (
                                       <Badge
                                         key={idx}
                                         variant='secondary'
