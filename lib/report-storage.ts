@@ -322,7 +322,7 @@ async function saveBlobReport(reportName: string, userName: string, periods: Per
   }
   assertBlobToken()
   await put(key, JSON.stringify(report, null, 2), {
-    access: "private",
+    access: "public",
     contentType: "application/json",
     token: BLOB_TOKEN,
   })
