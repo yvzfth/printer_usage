@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises"
 import { existsSync } from "fs"
 import { join, resolve } from "path"
-import { list, put, del } from "@vercel/blob"
+import { del, list, put } from "@vercel/blob"
 
 type PeriodsPayload = unknown
 
@@ -27,10 +27,20 @@ const STORAGE_PATH = process.env.REPORTS_DIRECTORY
   ? resolve(process.env.REPORTS_DIRECTORY)
   : join(process.cwd(), "storage", "reports")
 
-const BLOB_STORE_NAME = process.env.BLOB_STORE_NAME || "irhprinterreport-blob"
+
 const BLOB_PREFIX = process.env.BLOB_PREFIX || "reports"
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN
-const BLOB_BASE_URL = `https://${BLOB_STORE_NAME}.public.blob.vercel-storage.com`
+const BLOB_BASE_URL = process.env.BLOB_BASE_URL
+
+const useBlobStorage = () => Boolean(BLOB_TOKEN || process.env.VERCEL === "1")
+
+function assertBlobToken() {
+  if (!BLOB_TOKEN) {
+    throw new Error(
+      "Blob storage is enabled but BLOB_READ_WRITE_TOKEN is missing. Set it in your Vercel project environment.",
+    )
+  }
+}
 
 export function slugifyUserName(userName: string) {
   return (
@@ -45,8 +55,6 @@ export function slugifyUserName(userName: string) {
 function buildReportId(userSlug: string) {
   return `${userSlug}__${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
 }
-
-const useBlobStorage = () => Boolean(BLOB_TOKEN || process.env.VERCEL === "1")
 
 // ---------- Local filesystem helpers ----------
 async function ensureStorageDir() {
@@ -226,6 +234,7 @@ async function overwriteLocalReport(path: string, update: Partial<StoredReport>)
 const buildBlobKey = (userSlug: string, id: string) => `${BLOB_PREFIX}/${userSlug}/${id}.json`
 
 async function listAllBlobs() {
+  assertBlobToken()
   const blobs = []
   let cursor: string | undefined
   do {
@@ -237,8 +246,9 @@ async function listAllBlobs() {
 }
 
 async function fetchBlobJson(url: string) {
+  assertBlobToken()
   const res = await fetch(url, {
-    headers: BLOB_TOKEN ? { Authorization: `Bearer ${BLOB_TOKEN}` } : undefined,
+    headers: { Authorization: `Bearer ${BLOB_TOKEN}` },
     cache: "no-store",
   })
   if (!res.ok) return null
@@ -310,6 +320,7 @@ async function saveBlobReport(reportName: string, userName: string, periods: Per
     createdAt: new Date().toISOString(),
     periods,
   }
+  assertBlobToken()
   await put(key, JSON.stringify(report, null, 2), {
     access: "private",
     contentType: "application/json",
@@ -325,6 +336,7 @@ async function overwriteBlobReport(existing: StoredReport, updates: Partial<Stor
     updatedAt: new Date().toISOString(),
   }
   const key = buildBlobKey(merged.userSlug, merged.id)
+  assertBlobToken()
   await put(key, JSON.stringify(merged, null, 2), {
     access: "private",
     contentType: "application/json",
@@ -337,6 +349,7 @@ async function deleteBlobReport(id: string) {
   const slug = id.includes("__") ? id.split("__")[0] : ""
   const key = buildBlobKey(slug, id)
   const url = `${BLOB_BASE_URL}/${key}`
+  assertBlobToken()
   await del(url, { token: BLOB_TOKEN })
 }
 

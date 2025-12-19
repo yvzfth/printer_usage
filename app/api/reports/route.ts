@@ -8,7 +8,8 @@ export async function GET() {
     return NextResponse.json({ success: true, reports: grouped })
   } catch (error) {
     console.error("Error reading reports:", error)
-    return NextResponse.json({ success: false, error: "Failed to read reports" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to read reports"
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id })
   } catch (error) {
     console.error("Error saving report:", error)
-    return NextResponse.json({ success: false, error: "Failed to save report" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to save report"
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }

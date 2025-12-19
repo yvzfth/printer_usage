@@ -18,7 +18,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
     return NextResponse.json({ success: true, report })
   } catch (error) {
     console.error("Error loading report:", error)
-    return NextResponse.json({ success: false, error: "Failed to load report" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to load report"
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
@@ -35,7 +36,8 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting report:", error)
-    return NextResponse.json({ success: false, error: "Failed to delete report" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to delete report"
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
@@ -63,7 +65,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error updating report:", error)
-    return NextResponse.json({ success: false, error: "Failed to update report" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to update report"
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
@@ -98,6 +101,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json({ success: true, report: updated })
   } catch (error) {
     console.error("Error renaming report:", error)
-    return NextResponse.json({ success: false, error: "Failed to rename report" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to rename report"
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
