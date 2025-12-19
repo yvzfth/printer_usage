@@ -32,6 +32,11 @@ pnpm electron:build:win       # Windows NSIS installer
 
 Each desktop build runs the bundled Next server and stores reports under the user’s `appData`/`Application Support` directory (`reports` subfolder). The web build keeps saving JSON files in `storage/reports`.
 
+### Vercel (blob storage)
+
+- Set `BLOB_STORE_NAME=irhprinterreport-blob` and `BLOB_READ_WRITE_TOKEN` in Vercel.
+- When `BLOB_READ_WRITE_TOKEN` (or `VERCEL` env) is present, API routes use Vercel Blob for saving/loading JSON instead of the local filesystem. Desktop builds keep using the filesystem path exposed through `REPORTS_DIRECTORY`.
+
 ## Saving & Viewing Reports
 
 - Upload an HTML report, slice/filter data, and click **Save** to persist it.
