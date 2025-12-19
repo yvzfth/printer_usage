@@ -2,8 +2,9 @@ import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises"
 import { existsSync } from "fs"
 import { join, resolve } from "path"
 import { del, list, put } from "@vercel/blob"
+import type { ReportPeriod } from "./report-types"
 
-type PeriodsPayload = unknown
+type PeriodsPayload = ReportPeriod[]
 
 export type ReportSummary = {
   id: string
@@ -27,10 +28,11 @@ const STORAGE_PATH = process.env.REPORTS_DIRECTORY
   ? resolve(process.env.REPORTS_DIRECTORY)
   : join(process.cwd(), "storage", "reports")
 
-
+const BLOB_STORE_NAME = process.env.BLOB_STORE_NAME || "irhprinterreport-blob"
 const BLOB_PREFIX = process.env.BLOB_PREFIX || "reports"
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN
-const BLOB_BASE_URL = process.env.BLOB_BASE_URL
+const BLOB_BASE_URL =
+  process.env.BLOB_BASE_URL || `https://${BLOB_STORE_NAME}.public.blob.vercel-storage.com`
 
 const useBlobStorage = () => Boolean(BLOB_TOKEN || process.env.VERCEL === "1")
 
@@ -338,7 +340,7 @@ async function overwriteBlobReport(existing: StoredReport, updates: Partial<Stor
   const key = buildBlobKey(merged.userSlug, merged.id)
   assertBlobToken()
   await put(key, JSON.stringify(merged, null, 2), {
-    access: "private",
+    access: "public",
     contentType: "application/json",
     token: BLOB_TOKEN,
   })

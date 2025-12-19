@@ -1454,7 +1454,7 @@ export default function UploadAnalyze({
               />
 
               <p className='mb-2 text-sm'>
-                Drag & drop your HP Web Jetadmin HTML report here
+                Drag & drop your printer report here
               </p>
               <p className='mb-4 text-xs text-muted-foreground'>
                 We process files in-browser. No data leaves your device.
