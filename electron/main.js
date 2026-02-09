@@ -51,7 +51,7 @@ const prepareNextServer = () => {
 
       await new Promise((resolve, reject) => {
         nextHttpServer.once('error', reject);
-        nextHttpServer.listen(port, resolve);
+        nextHttpServer.listen(port, '127.0.0.1', resolve);
       });
 
       return nextHttpServer;
