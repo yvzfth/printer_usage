@@ -50,6 +50,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
 type PeriodKey = string; // unique ID for a file/period
@@ -162,12 +167,72 @@ const AVAILABLE_COLUMNS: ColumnConfig[] = [
   { key: 'otherApplication', label: 'Other Apps', shortLabel: 'Other Apps' },
   { key: 'total', label: 'Total', shortLabel: 'Total' },
 ];
+const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnKey>(['mono', 'color', 'total']);
+const PRINTER_CODE_BY_IP: Record<string, string> = {
+  '10.20.100.16': '5A',
+  '10.20.100.17': '5B',
+  '10.20.100.18': '6A',
+  '10.20.100.19': '6B',
+  '10.20.100.22': '10A',
+  '10.20.100.23': '10B',
+  '10.20.100.24': '11A',
+  '10.20.100.25': '11B',
+  '10.20.100.26': '12A',
+  '10.20.100.27': '12B',
+  '10.20.100.28': '13A',
+  '10.20.100.29': '13B',
+  '10.20.100.37': '9A',
+};
 
 const DEFAULT_REPORT_OWNER = 'General';
 
 function parseIntSafe(v: string): number {
   const n = Number.parseInt(v.replace(/[^\d-]/g, ''), 10);
   return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeColumnHeader(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function findColumnIndex(
+  headers: string[],
+  patterns: RegExp[],
+  fallbackIndex: number
+): number {
+  const foundIndex = headers.findIndex((header) =>
+    patterns.some((pattern) => pattern.test(header))
+  );
+  return foundIndex >= 0 ? foundIndex : fallbackIndex;
+}
+
+function getPrinterCodeFromIp(ipAddress: string): string | undefined {
+  return PRINTER_CODE_BY_IP[ipAddress.trim()];
+}
+
+function isUsableHostname(value: string | undefined, ipAddress: string): boolean {
+  if (!value) return false;
+  const normalized = value.trim();
+  if (!normalized) return false;
+  if (normalized === ipAddress.trim()) return false;
+  if (normalized.startsWith('<')) return false;
+  return true;
+}
+
+function resolvePrinterNameFromHtml(
+  ipAddress: string,
+  hostname: string | undefined
+): string {
+  const printerCodeFromIp = getPrinterCodeFromIp(ipAddress);
+  if (printerCodeFromIp) {
+    return printerCodeFromIp;
+  }
+
+  if (isUsableHostname(hostname, ipAddress)) {
+    return hostname!.trim();
+  }
+
+  return ipAddress;
 }
 
 const COLUMN_INDEXES = {
@@ -231,6 +296,18 @@ function derivePeriodLabel(
 }
 
 function formatPrinterName(printerName: string): string {
+  const printerCodeFromIp = getPrinterCodeFromIp(printerName);
+  if (printerCodeFromIp) {
+    return printerCodeFromIp;
+  }
+
+  const floorPrinterWithSuffixMatch = printerName.match(
+    /(\d+)(?:ST|ND|RD|TH)?_FLOOR_PRINTER_([A-Z])$/i
+  );
+  if (floorPrinterWithSuffixMatch) {
+    return `${floorPrinterWithSuffixMatch[1]}${floorPrinterWithSuffixMatch[2].toUpperCase()}`;
+  }
+
   // First, try to extract number + letter pattern (like 10A, 9B, etc.)
   const numberLetterMatch = printerName.match(/(\d+)([A-Z])$/i);
   if (numberLetterMatch) {
@@ -355,6 +432,9 @@ async function parseReportHtml(
     const idx = allRows.indexOf(gh);
 
     let foundColumnHeader = false;
+    let deviceModelIndex = 0;
+    let ipHostnameIndex = 1;
+    let ipAddressIndex = 2;
     for (let i = idx + 1; i < allRows.length; i++) {
       const tr = allRows[i];
 
@@ -363,6 +443,25 @@ async function parseReportHtml(
 
       // Mark when we find the column header
       if (tr.classList.contains('column_hdr')) {
+        const columnHeaders = Array.from(
+          tr.querySelectorAll<HTMLTableCellElement>('th, td')
+        ).map((cell) => normalizeColumnHeader(cell.textContent ?? ''));
+
+        deviceModelIndex = findColumnIndex(
+          columnHeaders,
+          [/^device model$/, /^model$/, /^device$/],
+          0
+        );
+        ipHostnameIndex = findColumnIndex(
+          columnHeaders,
+          [/^ip hostname$/, /^hostname$/, /^host name$/],
+          1
+        );
+        ipAddressIndex = findColumnIndex(
+          columnHeaders,
+          [/^ip address$/, /^ip$/],
+          2
+        );
         foundColumnHeader = true;
         continue;
       }
@@ -383,10 +482,12 @@ async function parseReportHtml(
         )
           continue;
 
-        // Extract printer information - printer name is in IP Hostname field
-        const deviceModel = cells[0] ?? 'Unknown Device';
-        const printerName = cells[1] ?? 'Unknown Printer'; // This is the actual printer name
-        const ipAddress = cells[2] ?? 'Unknown IP';
+        // Prefer explicit IP mapping for HTML imports. Ignore placeholder
+        // hostname values like "<NO ...>" and fall back to the raw IP.
+        const deviceModel = cells[deviceModelIndex] ?? 'Unknown Device';
+        const ipAddress = cells[ipAddressIndex] ?? 'Unknown IP';
+        const hostnameCell = cells[ipHostnameIndex]?.trim();
+        const printerName = resolvePrinterNameFromHtml(ipAddress, hostnameCell);
 
         // Updated column mapping
         const mono = parseIntSafe(cells[COLUMN_INDEXES.MONO] ?? '0');
@@ -797,7 +898,10 @@ export default function UploadAnalyze({
     Record<ColumnKey, boolean>
   >(
     Object.fromEntries(
-      AVAILABLE_COLUMNS.map((col) => [col.key, true])
+      AVAILABLE_COLUMNS.map((col) => [
+        col.key,
+        DEFAULT_VISIBLE_COLUMNS.has(col.key),
+      ])
     ) as Record<ColumnKey, boolean>
   );
   // Fix: Declare 'Key' as ColumnKey or import it if it's a distinct type.
@@ -805,19 +909,11 @@ export default function UploadAnalyze({
   const [zeroColumns, setZeroColumns] = useState<Set<ColumnKey>>(new Set());
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const [isPrinterMenuOpen, setIsPrinterMenuOpen] = useState(false);
-  const columnMenuRef = useRef<HTMLDivElement>(null);
   const printerMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
       const target = event.target as Node;
-      if (
-        isColumnMenuOpen &&
-        columnMenuRef.current &&
-        !columnMenuRef.current.contains(target)
-      ) {
-        setIsColumnMenuOpen(false);
-      }
       if (
         isPrinterMenuOpen &&
         printerMenuRef.current &&
@@ -1604,88 +1700,92 @@ export default function UploadAnalyze({
                     </>
                   )}
 
-                  <div className='relative' ref={columnMenuRef}>
-                    <Button
-                      size='sm'
-                      variant='outline'
-                      aria-haspopup='true'
-                      aria-expanded={isColumnMenuOpen}
-                      onClick={() => {
+                  <Popover
+                    open={isColumnMenuOpen}
+                    onOpenChange={(open) => {
+                      if (open) {
                         setIsPrinterMenuOpen(false);
-                        setIsColumnMenuOpen((prevOpen) => !prevOpen);
-                      }}
-                    >
-                      <Settings className='mr-2 h-3.5 w-3.5' /> Columns
-                    </Button>
-                    {isColumnMenuOpen && (
-                      <div
-                        role='menu'
-                        className='absolute right-0 z-20 mt-2 w-80 rounded-md border bg-popover p-4 text-popover-foreground shadow-md'
+                      }
+                      setIsColumnMenuOpen(open);
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        aria-haspopup='true'
+                        aria-expanded={isColumnMenuOpen}
                       >
-                        <div className='space-y-4'>
-                          <div>
-                            <h4 className='text-sm font-semibold'>
-                              Column Visibility
-                            </h4>
-                            <p className='text-xs text-muted-foreground'>
-                              Toggle which usage columns are displayed. Columns
-                              with only zero values are auto-hidden.
-                            </p>
-                          </div>
-                          <div className='flex gap-2'>
-                            <Button
-                              size='sm'
-                              variant='outline'
-                              className='flex-1'
-                              onClick={showAllColumns}
-                            >
-                              Show All
-                            </Button>
-                            <Button
-                              size='sm'
-                              variant='outline'
-                              className='flex-1'
-                              onClick={hideZeroColumns}
-                            >
-                              Hide Zeros
-                            </Button>
-                          </div>
-                          <div className='space-y-2 max-h-60 overflow-y-auto pr-2'>
-                            {AVAILABLE_COLUMNS.map((col) => {
-                              const isZero = zeroColumns.has(col.key);
-                              const isVisible = columnVisibility[col.key];
-                              return (
-                                <div
-                                  key={col.key}
-                                  className='flex items-center space-x-2 rounded-md border border-border/60 p-2'
+                        <Settings className='mr-2 h-3.5 w-3.5' /> Columns
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align='end'
+                      className='w-80'
+                    >
+                      <div className='space-y-4'>
+                        <div>
+                          <h4 className='text-sm font-semibold'>
+                            Column Visibility
+                          </h4>
+                          <p className='text-xs text-muted-foreground'>
+                            Toggle which usage columns are displayed. Columns
+                            with only zero values are auto-hidden.
+                          </p>
+                        </div>
+                        <div className='flex gap-2'>
+                          <Button
+                            size='sm'
+                            variant='outline'
+                            className='flex-1'
+                            onClick={showAllColumns}
+                          >
+                            Show All
+                          </Button>
+                          <Button
+                            size='sm'
+                            variant='outline'
+                            className='flex-1'
+                            onClick={hideZeroColumns}
+                          >
+                            Hide Zeros
+                          </Button>
+                        </div>
+                        <div className='space-y-2 max-h-60 overflow-y-auto pr-2'>
+                          {AVAILABLE_COLUMNS.map((col) => {
+                            const isZero = zeroColumns.has(col.key);
+                            const isVisible = columnVisibility[col.key];
+                            return (
+                              <div
+                                key={col.key}
+                                className='flex items-center space-x-2 rounded-md border border-border/60 p-2'
+                              >
+                                <Checkbox
+                                  id={`col-${col.key}`}
+                                  checked={isVisible && !isZero}
+                                  onCheckedChange={() =>
+                                    toggleColumnVisibility(col.key)
+                                  }
+                                  disabled={isZero}
+                                />
+                                <label
+                                  htmlFor={`col-${col.key}`}
+                                  className={cn(
+                                    'text-sm font-medium leading-none',
+                                    isZero &&
+                                      'text-muted-foreground line-through'
+                                  )}
                                 >
-                                  <Checkbox
-                                    id={`col-${col.key}`}
-                                    checked={isVisible && !isZero}
-                                    onCheckedChange={() =>
-                                      toggleColumnVisibility(col.key)
-                                    }
-                                    disabled={isZero}
-                                  />
-                                  <label
-                                    htmlFor={`col-${col.key}`}
-                                    className={cn(
-                                      'text-sm font-medium leading-none',
-                                      isZero &&
-                                        'text-muted-foreground line-through'
-                                    )}
-                                  >
-                                    {col.label}
-                                    {isZero && ' (all zeros)'}
-                                  </label>
-                                </div>
-                              );
-                            })}
-                          </div>
+                                  {col.label}
+                                  {isZero && ' (all zeros)'}
+                                </label>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
-                  </div>
+                    </PopoverContent>
+                  </Popover>
 
                   <Button size='sm' variant='outline' onClick={onExportCsv}>
                     <Download className='mr-2 h-3.5 w-3.5' /> Export CSV
