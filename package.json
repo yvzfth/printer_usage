@@ -3,7 +3,7 @@
   "author": {
     "name": "Faith Yavuz"
   },
-  "version": "1.0.5",
+  "version": "1.0.6",
   "versionNotes": "Vercel blob storage integration",
   "private": true,
   "main": "electron/main.js",
