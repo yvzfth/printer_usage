@@ -1,5 +1,6 @@
 {
   "name": "printer-report-app",
+  "description": "Desktop and web app for analyzing and saving printer usage reports.",
   "author": {
     "name": "Faith Yavuz"
   },
@@ -20,6 +21,7 @@
   "build": {
     "appId": "com.fatih.printerreport",
     "productName": "Printer Report",
+    "npmRebuild": false,
     "directories": {
       "output": "dist/electron"
     },
@@ -29,7 +31,13 @@
       "electron/**",
       "next.config.mjs",
       "package.json",
-      "node_modules/**"
+      "node_modules/**",
+      "!node_modules/.pnpm/node_modules/@next/swc-darwin-arm64{,/**}",
+      "!node_modules/.pnpm/node_modules/@next/swc-darwin-x64{,/**}",
+      "!node_modules/.pnpm/node_modules/@next/swc-linux-arm64-gnu{,/**}",
+      "!node_modules/.pnpm/node_modules/@next/swc-linux-arm64-musl{,/**}",
+      "!node_modules/.pnpm/node_modules/@next/swc-linux-x64-gnu{,/**}",
+      "!node_modules/.pnpm/node_modules/@next/swc-linux-x64-musl{,/**}"
     ],
     "mac": {
       "category": "public.app-category.productivity",
